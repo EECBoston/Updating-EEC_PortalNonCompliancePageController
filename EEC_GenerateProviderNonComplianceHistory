@@ -117,83 +117,89 @@
                 <strong>Licensor:&nbsp;{!provider.Licensor_Full_Name__c}</strong>
             </div>
         </div><br/><br/>
-        <apex:outputPanel rendered="{!iiWrapperList.size > 0}">
+        <apex:outputPanel >
             <div class="visit-non-compliance-container">
                 <caption style="margin-bottom: 10px;font-size:130%">
                     <strong>Noncompliance associated with Visits</strong>
                 </caption>
                 <div>
                     <table class="table table-hover" style="width: 100%;">
-                        <apex:repeat value="{!iiVisitWrapperList}" var="nonCompVisits"> 
-                           <apex:outputPanel rendered="{!nonCompVisits.inspStatus == 'Closed' || nonCompVisits.inspStatus == 'Report Sent to Provider, Awaiting feedback' || nonCompVisits.inspStatus == 'Feedback received, to review'}"> 
+                        <apex:repeat value="{!reportVisitWrapperList}" var="compNonCompVisits"> 
+                           <apex:outputPanel rendered="{!reportVisitWrapperList.size > 0 && (compNonCompVisits.inspStatus == 'Closed' || compNonCompVisits.inspStatus == 'Report Sent to Provider, Awaiting feedback' || compNonCompVisits.inspStatus == 'Feedback received, to review')}"> 
                             <tr>
                               <td>
-                                <table border="2" style="table-layout: fixed; border-style: solid; width: 100%;background-color : #D2D2D2;">
-                                    <tr>
-                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
-                                            Visit Number: {!nonCompVisits.visitname}<br/>
-                                            Visit Date: {!nonCompVisits.dateofvisit}
-                                        </td> 
-                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
-                                            Visit Type : {!nonCompVisits.inspType}<br/>
-                                            Visit Tool : {!nonCompVisits.inspToolUser}
-                                        </td>
-                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
-                                            Visit Status : {!nonCompVisits.inspStatus}
-                                        </td>
-                                    </tr>           
-                                </table>
-                                <table border="2" style="table-layout: fixed; border-style: solid; width: 100%">
-                                       <tr>     
-                                            <th style="width: 33%;">Noncompliant Item Description</th>                                     
-                                            <th style="width: 33%;">Statement of Non-Compliance</th>
-                                            <th style="width: 33%;">Correction Plan</th>
-                                       </tr>
-                                       <apex:repeat value="{!allVisitNonComplianceItems[nonCompVisits.visitname]}" var="visit" >  
-                                              <tr>  
-                                                <td>
-                                                  <apex:outputPanel rendered="{!visit.inspDescription != null}">
-                                                      <strong>Description: </strong>
-                                                      <apex:outputLabel value="{!visit.inspDescription}"></apex:outputLabel><br/>
-                                                  </apex:outputPanel>   
-                                                  <apex:outputPanel rendered="{!visit.regulationMap != null}">  
-                                                      <strong>Associated Regulation: </strong>
-                                                      <apex:repeat value="{!visit.regulationMap}" var="iiName">
-                                                         <apex:outputLabel value="{!iiName}" />
-                                                      </apex:repeat>
-                                                  </apex:outputPanel>
-                                                </td>
-                                                <td>{!visit.observations}{!visit.Name}</td> 
-                                                <td>
-                                                    <apex:outputLabel value="{!visit.correctionPlan}"/><br/>
-                                                    <apex:outputPanel rendered="{!visit.implementdate != null}">
-                                                        Date Implemented: <apex:outputLabel value="{!visit.implementdate}" /> 
-                                                    </apex:outputPanel> 
-                                                </td>                                
-                                                <!--<td>{!visit.viFeedback}</td>-->  
-                                              </tr>
-                                        </apex:repeat>
-                               </table>
+                                <apex:outputPanel >
+                                    <table border="2" style="table-layout: fixed; border-style: solid; width: 100%;background-color : #D2D2D2;">
+                                        <tr>
+                                            <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                                Visit Number: {!compNonCompVisits.visitname}<br/>
+                                                Visit Date: {!compNonCompVisits.dateofvisit}
+                                            </td> 
+                                            <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                                Visit Type : {!compNonCompVisits.inspType}<br/>
+                                                Visit Tool : {!compNonCompVisits.inspToolUser}
+                                            </td>
+                                            <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                                Visit Result : {!compNonCompVisits.visitResult}
+                                            </td>
+                                        </tr>           
+                                    </table>
+                                </apex:outputPanel>
+                                <apex:outputPanel rendered="{!CONTAINS(compNonCompVisits.visitResult, 'Non')}">
+                                    <table border="2" style="table-layout: fixed; border-style: solid; width: 100%">
+                                           <tr>     
+                                                <th style="width: 33%;">Noncompliant Item Description</th>                                     
+                                                <th style="width: 33%;">Statement of Non-Compliance</th>
+                                                <th style="width: 33%;">Correction Plan</th>
+                                           </tr>
+                                           <apex:repeat value="{!allVisitCNCItems[compNonCompVisits.visitname]}" var="visit" >  
+                                                  <tr>  
+                                                    <td>
+                                                      <apex:outputPanel rendered="{!visit.inspDescription != null}">
+                                                          <strong>Description: </strong>
+                                                          <apex:outputLabel value="{!visit.inspDescription}"></apex:outputLabel><br/>
+                                                      </apex:outputPanel>   
+                                                      <apex:outputPanel rendered="{!visit.regulationMap != null}">  
+                                                          <strong>Associated Regulation: </strong>
+                                                          <apex:repeat value="{!visit.regulationMap}" var="iiName">
+                                                             <apex:outputLabel value="{!iiName}" />
+                                                          </apex:repeat>
+                                                      </apex:outputPanel>
+                                                    </td>
+                                                    <td>{!visit.observations}{!visit.Name}</td> 
+                                                    <td>
+                                                        <apex:outputLabel value="{!visit.correctionPlan}"/><br/>
+                                                        <apex:outputPanel rendered="{!visit.implementdate != null}">
+                                                            Date Implemented: <apex:outputLabel value="{!visit.implementdate}" /> 
+                                                        </apex:outputPanel> 
+                                                    </td>                                
+                                                    <!--<td>{!visit.viFeedback}</td>-->  
+                                                  </tr>
+                                            </apex:repeat>
+                                    </table>
+                                </apex:outputPanel>
                                </td>
                             </tr>
                             </apex:outputPanel>
                         </apex:repeat>
                   </table>  
-                  <apex:outputPanel rendered="{!iiVisitWrapperList.size == 0}">
+                  <apex:outputPanel rendered="{!reportVisitWrapperList == null || reportVisitWrapperList.size == 0}">
                       <div>
                           <span style="font-size:12px;">There are no noncompliances associated with visits.</span>
                       </div>
                   </apex:outputPanel>                    
                 </div>
-            </div><br/><br/><br/>
-            <div>
+            </div>
+        </apex:outputPanel><br/><br/><br/> 
+        <apex:outputPanel >
+            <div class="visit-non-compliance-container">
                 <caption style="margin-bottom: 10px;font-size:130%">
                     <strong>Noncompliance associated with Investigations</strong>
                 </caption>    
                 <div>
                     <table class="table table-hover" style="width: 100%">
-                        <apex:repeat value="{!iiInvWrapperList}" var="nonCompInv" >
-                            <apex:outputPanel rendered="{!nonCompInv.invStatus == 'Closed' || nonCompInv.invStatus == 'Report Sent to Provider, Awaiting feedback' || nonCompInv.invStatus == 'Feedback received, to review' || nonCompInv.invStatus == 'Closed (Legacy Investigation)'}">
+                        <apex:repeat value="{!reportInvestigationWrapperList}" var="nonCompInv" >
+                            <apex:outputPanel rendered="{!reportInvestigationWrapperList.size > 0 && (nonCompInv.invStatus == 'Closed' || nonCompInv.invStatus == 'Report Sent to Provider, Awaiting feedback' || nonCompInv.invStatus == 'Feedback received, to review' || nonCompInv.invStatus == 'Closed (Legacy Investigation)')}">
                                 <tr>
                                     <td>
                                         <table border="2" style="table-layout: fixed; border-style: solid; width: 100%; background-color : #D2D2D2;">
@@ -206,7 +212,7 @@
                                                 </td> 
                                             </tr>    
                                         </table>     
-                                        <table border="2" style="table-layout: fixed; border-style: solid; width: 100%">
+                                        <table border="2" style="table-layout: fixed; border-style: solid; width: 100%;">
                                           <tr>    
                                             <th style="width: 33%;">Noncompliant Item Description</th>                                     
                                             <th style="width: 28.5%;">Statement of Non-Compliance</th>
@@ -242,14 +248,73 @@
                             </apex:outputPanel>
                         </apex:repeat>
                     </table>
-                    <apex:outputPanel rendered="{!iiInvWrapperList.size == 0}">
+                    <apex:outputPanel rendered="{!reportInvestigationWrapperList == null || reportInvestigationWrapperList.size == 0}">
                       <div>
                           <span style="font-size:12px;">There are no noncompliances associated with Investigations.</span>
                       </div>
                     </apex:outputPanel>
                 </div>
             </div>
-        </apex:outputPanel>    
+        </apex:outputPanel><br/><br/><br/> 
+        <apex:outputPanel >
+            <div class="visit-non-compliance-container">
+                <caption style="margin-bottom: 10px;font-size:130%">
+                    <strong>Incidents/injuries associated with Provider</strong>
+                </caption>
+                <div>
+                    <table class="table table-hover" style="width: 100%;">
+                        <apex:repeat value="{!cseIncidentInjuryList}" var="incidentInjury"> 
+                           <apex:outputPanel rendered="{!incidentInjury.caseStatus == 'In Triage' || incidentInjury.caseStatus == 'Escalated' || incidentInjury.caseStatus == 'Closed' || incidentInjury.caseStatus == 'Investigation in Progress' || incidentInjury.caseStatus == 'New' || incidentInjury.caseStatus == 'Not Submitted'}"> 
+                            <tr>
+                              <td>
+                                <table border="2" style="table-layout: fixed; border-style: solid; width: 100%;background-color : #D2D2D2;">
+                                    <tr>
+                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                            Case Number: {!incidentInjury.caseNumber}<br/>
+                                            Created Date: {!incidentInjury.formattedCreatedDate}
+                                        </td> 
+                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                            Intake Method: {!incidentInjury.caseOrigin}<br/>
+                                            Closed Date : {!incidentInjury.formattedClosedDate}
+                                        </td>
+                                        <td style="width: 33%; padding-top: 10px; padding-left: 5px;">
+                                            Case Status : {!incidentInjury.caseStatus}
+                                        </td>
+                                    </tr>           
+                                </table>
+                                <table border="2" style="table-layout: fixed; border-style: solid; width: 100%">
+                                       <tr>
+                                            <td>                                       
+                                                <apex:outputPanel rendered="{!incidentInjury.caseType == 'Incident'}">
+                                                    <strong>Incident Description</strong>                                            
+                                                </apex:outputPanel>     
+                                                <apex:outputPanel rendered="{!incidentInjury.caseType == 'SGLSA_Injury'}">
+                                                    <strong>Injury Description</strong>                                             
+                                                </apex:outputPanel>
+                                            </td>                                           
+                                       </tr>
+                                       <tr> 
+                                            <td>
+                                              <apex:outputPanel rendered="{!incidentInjury.noteToUser != null}">
+                                                  <strong>Note to the user: </strong>
+                                                  <apex:outputLabel value="{!incidentInjury.noteToUser}"></apex:outputLabel><br/>
+                                              </apex:outputPanel>   
+                                            </td>                                           
+                                       </tr>                                       
+                               </table>
+                               </td>
+                            </tr>
+                           </apex:outputPanel>
+                        </apex:repeat>
+                  </table>  
+                  <apex:outputPanel rendered="{!cseIncidentInjuryList == null || cseIncidentInjuryList.size == 0}">
+                      <div>
+                          <span style="font-size:12px;">There are no incidents/injuries associated with this provider in LEAD but there may be incidents/injuries in the legacy system from the past.</span>
+                      </div>
+                  </apex:outputPanel>                    
+                </div>
+            </div>
+        </apex:outputPanel><br/><br/><br/>      
     </div>
     </body>
 </apex:page>

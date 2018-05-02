@@ -1,4 +1,18 @@
-public without sharing class EEC_PortalNonCompliancePageController {
+/**
+* EEC_PortalNonCompliancePageController
+* 
+* @description This is conroller for portal page EEC_PortalNonCompliancePage and also for 
+* EEC_GenerateProviderNonComplianceHistory page that is used to create a pdf version of the correction
+* plan submitted by the provider. 
+* Providers will see all the non-compliances grouped by related visit/investigation on this page. They 
+* can add their correction plan, supporting documents etc and submit.
+* @devNotes Currently using without sharing to avoid insufficient access error which is probably due
+* to some update on a related record. This needs to be further evaluated and removed. [Qamar - 081817]
+* @author Incapsulate Team
+* @date 2017
+*/
+
+global without sharing class EEC_PortalNonCompliancePageController {
  
    public List<Inspection_Item__c> visititems {get;set; }
    public List<Inspection__c> relatedVisits {get; set;}
@@ -13,7 +27,17 @@ public without sharing class EEC_PortalNonCompliancePageController {
     
    public List<InspectionListWrapper> iiVisitWrapperList {get;set;}
    public List<InspectionListWrapper> iiInvWrapperList {get;set;} 
-          
+
+   public List<Case> incidentCase {get;set;}
+   public List<Case> injuryCase {get;set;}
+   public List<Inspection_Item__c> visititemsC {get;set;}   
+   public List<InsInvListReportWrapper>  reportVisitWrapperList {get;set;} 
+   public List<InsInvListReportWrapper> reportInvestigationWrapperList {get;set;}  
+   public List<visitCompListReportWrapper> reportvistCWrapperList {get;set;}
+   public List<visitCompListReportWrapper> viCAllWrapperList {get;set;}  
+   public Set<String> allCVisits = new Set<String>();
+   Public Map<String, List<visitCompListReportWrapper>> allVisitComplianceItems {get;set;}
+   
    Public Map<String,List<InspectionListWrapper>> allInvNonComplianceItems {get; set;}
    Private Map<String,Id> allInvIds = new Map<String,Id>();
    Public Map<String,List<InspectionListWrapper>> allVisitNonComplianceItems {get; set;}
@@ -96,7 +120,7 @@ public without sharing class EEC_PortalNonCompliancePageController {
    public PageReference returnProvider() {
     PageReference pPage = page.EEC_PortalProviderPage;
     if(memberId != null)  
-       pPage.getParameters().put('member',EEC_Util.encryptGetParam(memberId));
+       pPage.getParameters().put('member',memberId);
     return pPage;
   }
     
@@ -119,6 +143,33 @@ public without sharing class EEC_PortalNonCompliancePageController {
                       AND Inspection_Result__c = 'Non-Compliant'
                       AND To_Review_on_Portal__c IN: viewTypes 
                       LIMIT 200];
+                      
+    //Changes starts here
+        visititemsC = [SELECT Id, Name, Inspection_No__r.Name, Recordtype.Name, Inspection_No__c, Inspection_No__r.Visit_Tool_Used__r.Name, Inspection_No__r.RecordType.Name, 
+                      Inspection_No__r.Date_Of_Visit__c, Inspection_No__r.Status__c, 
+                      Inspection_No__r.Investigation__c,Description_of_inspection__c, 
+                      Inspection_No__r.Investigation__r.Name, Inspection_No__r.Investigation__r.Closed_Date__c, Inspection_No__r.Investigation__r.Investigation_Status__c
+                      FROM Inspection_Item__c 
+                      WHERE Inspection_No__r.Provider_No__c = :accountId
+                      AND Inspection_Result__c = 'Compliant'
+                      LIMIT 9000];
+        system.debug('Compliant Visits : ' + visititemsC);
+        
+        incidentCase = [SELECT CaseNumber, Origin, Status, ClosedDate, CreatedDate, Note_To_User__c
+                        FROM Case
+                        WHERE AccountId = :accountId AND
+                              RecordType.DeveloperName = 'Incident'
+                        ORDER BY CreatedDate DESC];
+        system.debug('Incident : ' + incidentCase);
+        
+        injuryCase   = [SELECT CaseNumber, Origin, Status, ClosedDate, CreatedDate, Note_To_User__c
+                        FROM Case
+                        WHERE AccountId = :accountId AND
+                              RecordType.DeveloperName = 'SGLSA_Injury'
+                        ORDER BY CreatedDate DESC];
+        system.debug('Injury : ' + incidentCase);       
+    //Changes ends here                   
+                      
            //Getting list of all visits that may need staus update once visit items are reviewed. Qamar (LEAD-4678)
            Set<id> relatedVisitIdSet = new Set<Id>();
            for(Inspection_Item__c ii : visititems){
@@ -156,12 +207,20 @@ public without sharing class EEC_PortalNonCompliancePageController {
                   }
                }
                Integer rowIndex = 0; 
+               Integer rowIdx   = 0;               
                System.debug('visititems-->' + visititems);
                iiVisitWrapperList = new List<InspectionListWrapper>();
                investigationvVisitItems = new List<Inspection_Item__c>();
+               reportVisitWrapperList   = new List<InsInvListReportWrapper>();         
                for(Inspection_Item__c ii : visititems){ 
-                   if(!allVisits.contains(ii.Inspection_No__r.Name) && ii.Inspection_No__r.Investigation__c == null)
+                   if(!allVisits.contains(ii.Inspection_No__r.Name) && ii.Inspection_No__r.Investigation__c == null){
                        iiVisitWrapperList.add(new InspectionListWrapper(rowIndex,ii,iregulationMap));
+                       if((ii.Inspection_No__r.Status__c == 'Closed' || ii.Inspection_No__r.Status__c == 'Report Sent to Provider, Awaiting feedback' || ii.Inspection_No__r.Status__c == 'Feedback received, to review') && ii.Inspection_No__r.Date_Of_Visit__c != null){
+                            reportVisitWrapperList.add(new InsInvListReportWrapper(rowIdx,ii,iregulationMap,'inspection'));
+                            system.debug('===> reportVisitWrapperList 01 : ' + reportVisitWrapperList);
+                            rowIdx = rowIdx + 1;
+                        }
+                    }
                    if(ii.Inspection_No__r.Investigation__c != null){
                        investigationvVisitItems.add(ii);
                        allInvestigationVisits.add(ii.Inspection_No__r.Investigation__r.Name);
@@ -176,7 +235,9 @@ public without sharing class EEC_PortalNonCompliancePageController {
              
         ncWrapperList = new List<ComplainceListWrapper>();
         iiInvWrapperList = new List<InspectionListWrapper>();
+        reportInvestigationWrapperList  = new List<InsInvListReportWrapper>();
         Integer rowIndex = 0; 
+        Integer rowNIdx  = 0;       
         noncompitems = [SELECT Id,Name,Recordtype.Name,Observations__c,Investigation__c,
                         Corrective_Action_EEC_Feedback__c,Investigation__r.Investigation_Type__c,
                         Investigation__r.name,Correction_Plan__c,Date_Implemented__c,
@@ -211,8 +272,14 @@ public without sharing class EEC_PortalNonCompliancePageController {
                   }
                }
                for(Non_Compliant__c nc : noncompitems){  
-                   if(!allInvestigation.contains(nc.Investigation__r.name))
+                   if(!allInvestigation.contains(nc.Investigation__r.name)){
                        iiInvWrapperList.add(new InspectionListWrapper(rowIndex,nc,ncregulationMap));
+                       if((nc.Investigation__r.Investigation_Status__c  == 'Closed'  || nc.Investigation__r.Investigation_Status__c  == 'Closed (Legacy Investigation)' || nc.Investigation__r.Investigation_Status__c  == 'Report Sent to Provider, Awaiting feedback' || nc.Investigation__r.Investigation_Status__c  == 'Feedback received, to review') && nc.Investigation__r.Closed_Date__c != null){
+                            reportInvestigationWrapperList.add(new InsInvListReportWrapper(rowNIdx,nc,ncregulationMap,'investigation'));
+                            system.debug('===> reportInvestigationWrapperList : ' + reportInvestigationWrapperList);
+                            rowNIdx = rowNIdx + 1;
+                        }                      
+                    }
                    allInvestigation.add(nc.Investigation__r.name);
                    
                    iiWrapperList.add(new InspectionListWrapper(rowIndex,nc,ncregulationMap));
@@ -224,13 +291,34 @@ public without sharing class EEC_PortalNonCompliancePageController {
        System.debug('iiVisitWrapperList-->' + iiVisitWrapperList);
        if(investigationvVisitItems != null && investigationvVisitItems.size() > 0){
                for(Inspection_Item__c ii : investigationvVisitItems){
-                   if(!allInvestigation.contains(ii.Inspection_No__r.Investigation__r.Name))
+                   if(!allInvestigation.contains(ii.Inspection_No__r.Investigation__r.Name)){
                        iiInvWrapperList.add(new InspectionListWrapper(rowIndex,ii,iregulationMap));
+                       if((ii.Inspection_No__r.Status__c  == 'Closed' || ii.Inspection_No__r.Status__c  == 'Closed (Legacy Investigation)' || ii.Inspection_No__r.Status__c  == 'Report Sent to Provider, Awaiting feedback' || ii.Inspection_No__r.Status__c  == 'Feedback received, to review') && ii.Inspection_No__r.Investigation__r.Closed_Date__c != null){
+                            reportInvestigationWrapperList.add(new InsInvListReportWrapper(rowNIdx,ii,iregulationMap,'investigation'));
+                            system.debug('===> reportInvestigationWrapperList : ' + reportInvestigationWrapperList);
+                            rowNIdx = rowNIdx + 1;  
+                        }                      
+                    }
                    allInvestigation.add(ii.Inspection_No__r.Investigation__r.Name);
 
                    rowIndex = rowIndex + 1; 
                }
+        }      
+       //Changes starts here
+       System.debug('==> reportVisitWrapperList : ' + reportVisitWrapperList);
+       if(reportVisitWrapperList != null && reportVisitWrapperList.size() > 0){
+          system.debug('Before Sorting reportVisitWrapperList : ' + reportVisitWrapperList);
+          reportVisitWrapperList.sort();
+          system.debug('After Sorting reportVisitWrapperList : ' + reportVisitWrapperList);
        }
+
+       system.debug('reportInvestigationWrapperList : ' + reportInvestigationWrapperList);
+       if(reportInvestigationWrapperList != null && reportInvestigationWrapperList.size() > 0){
+          system.debug('Before Sorting reportInvestigationWrapperList : ' + reportInvestigationWrapperList);
+          reportInvestigationWrapperList.sort();
+          system.debug('After Sorting reportInvestigationWrapperList : ' + reportInvestigationWrapperList);
+       }      
+       //Changes ends here     
        allInvNonComplianceItems = new Map<String, List<InspectionListWrapper>>();
        allVisitNonComplianceItems = new Map<String, List<InspectionListWrapper>>();
        for(String name : allInvestigation){
@@ -256,6 +344,55 @@ public without sharing class EEC_PortalNonCompliancePageController {
            }
            allVisitNonComplianceItems.put(name,wrapperList);
        }
+       
+       //Changes starts here
+       reportvistCWrapperList = new List<visitCompListReportWrapper>();
+       viCAllWrapperList = new List<visitCompListReportWrapper>();
+       system.debug('==> visititemsC' + visititemsC);
+       if(visititemsC != null && visititemsC.size() > 0){  
+           Integer rowIdxCAll = 0;     
+           Integer rowIdxC = 0;  
+           system.debug('==> rowIdxC : ' + rowIdxC);       
+           for(Inspection_Item__c viC : visititemsC){
+                system.debug('Before allCVisits : ' + allCVisits);
+                if(!allCVisits.contains(viC.Inspection_No__r.Name)){
+                    allCVisits.add(viC.Inspection_No__r.Name); 
+                    system.debug('After allCVisits : ' + allCVisits);
+                    if((viC.Inspection_No__r.Status__c == 'Closed' || viC.Inspection_No__r.Status__c == 'Report Sent to Provider, Awaiting feedback' || viC.Inspection_No__r.Status__c == 'Feedback received, to review') && viC.Inspection_No__r.Date_Of_Visit__c != null){
+                           reportvistCWrapperList.add(new visitCompListReportWrapper(rowIdxC, viC));
+                           system.debug('===> reportvistCWrapperList 01 : ' + reportvistCWrapperList);
+                           system.debug('===> viC.Inspection_No__r.Status__c : ' + viC.Inspection_No__r.Status__c);
+                           rowIdxC = rowIdxC + 1;                      
+                           system.debug('===> rowIdxC : ' + rowIdxC); 
+                    }                   
+                }
+                
+                system.debug('Outside viC : ' + viC);
+                system.debug('==> rowIdxCAll : ' + rowIdxCAll);
+                viCAllWrapperList.add(new visitCompListReportWrapper(rowIdxCAll, viC)); 
+                rowIdxCAll = rowIdxCAll + 1;                
+           }
+       }
+       system.debug('===> reportvistCWrapperList : ' + reportvistCWrapperList);
+
+       if(reportvistCWrapperList != null && reportvistCWrapperList.size() > 0){
+          system.debug('Before Sorting reportvistCWrapperList : ' + reportvistCWrapperList);
+          reportvistCWrapperList.sort();
+          system.debug('After Sorting reportvistCWrapperList : ' + reportvistCWrapperList);
+       }
+
+       allVisitComplianceItems = new Map<String, List<visitCompListReportWrapper>>();
+       for(String name : allCVisits){
+           List<visitCompListReportWrapper> visitCwrapperList = new List<visitCompListReportWrapper>();
+           for(visitCompListReportWrapper icwl :viCAllWrapperList){
+                if(icwl.visitname == name){
+                    visitCwrapperList.add(icwl);
+                }
+           }
+           allVisitComplianceItems.put(name,visitCwrapperList);
+       }       
+       //Changes ends here     
+       
         System.debug('allVisitNonComplianceItems-->' + allVisitNonComplianceItems);
        if((visititems == null && visititems.size() == 0) && (noncompitems == null && noncompitems.size() == 0)){
            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.INFO, 'Current, there is no non-compliance that requires your feedback.'));           
@@ -341,6 +478,217 @@ public without sharing class EEC_PortalNonCompliancePageController {
             this.invId = ncomp.Investigation__c;
         }
     }
+    
+    //Changes starts here
+  global class InsInvListReportWrapper implements Comparable{
+       
+    public Id Id {get;set;}
+    public String visitname {get;set;}
+    public Integer rowIndex { get; set; }
+    public String Type {get; private set;}
+    public Map<String,String> regulationMap {get; set;}
+    public String dateofvisit {get;set;}
+    public String closedDate {get;set;}  
+    public String implementdate {get;set;}
+    public String observations {get;set;}
+    public String correctionPlan {get;set;}
+    public Inspection_Item__c inspItem {get;set;}
+    public String name {get;set;}  
+    public String InvestType {get; private set;}
+    public Non_Compliant__c compItem {get;set;}
+    public String ncFeedback {get; set;}  
+    public String viFeedback {get; set;}
+    public String invId {get;set;}
+    public String inspDescription {get; set;}
+    public String inspStatus {get; set;}
+    public String inspToolUser {get; set;}
+    public String inspType {get; set;}
+    public String invStatus {get; set;}
+    public String iiType {get; set;}
+    
+    public InsInvListReportWrapper (Integer rowIndex, Inspection_Item__c insp,Map<Id, Map<String,String>> iRegMap, String striiType) {
+         this.Id = insp.Id;
+         this.rowIndex = rowIndex;
+         this.Type = insp.RecordType.Name;
+         this.regulationMap = null;
+         if(this.Type == 'Standard Visit Item' && insp.Standard_Inspection_Item__c != null){
+              this.regulationMap = iRegMap.get(insp.Standard_Inspection_Item__c);
+         }
+         else{
+              this.regulationMap = new Map<String,String>();
+              if(insp.Associated_regulation__c != null){
+                this.regulationMap.put(insp.Associated_regulation__r.Regulation_Number__c,insp.Associated_regulation__c);
+              }
+            }
+            this.visitname = insp.Inspection_No__r.Name;
+            this.name = insp.Inspection_No__r.Investigation__r.Name;
+            this.invId = insp.Inspection_No__r.Investigation__c;
+            this.implementdate = insp.Date_Implemented__c != null ? insp.Date_Implemented__c.format() : String.valueOf(insp.Date_Implemented__c);
+            this.dateofvisit = insp.Inspection_No__r.Date_Of_Visit__c != null ? insp.Inspection_No__r.Date_Of_Visit__c.format() : String.valueOf(insp.Inspection_No__r.Date_Of_Visit__c);
+            this.closedDate = insp.Inspection_No__r.Investigation__r.Closed_Date__c != null ? insp.Inspection_No__r.Investigation__r.Closed_Date__c .format() : String.valueOf(insp.Inspection_No__r.Investigation__r.Closed_Date__c);
+            this.observations = insp.observations__c;
+            this.correctionPlan = insp.correction_plan__c;
+            this.inspItem = insp;
+            this.viFeedback = insp.Corrective_Action_EEC_Feedback__c;
+            this.inspDescription = insp.Description_of_inspection__c;
+            this.inspStatus = insp.Inspection_No__r.Status__c;
+            this.inspToolUser = insp.Inspection_No__r.Visit_Tool_Used__r.Name;
+            this.inspType = insp.Inspection_No__r.RecordType.Name;
+            this.invStatus = insp.Inspection_No__r.Investigation__r.Investigation_Status__c;
+            this.iiType = striiType;
+      }
+       
+      public InsInvListReportWrapper (Integer rowIndex, Non_Compliant__c ncomp, Map<Id, Map<String,String>> nRegMap, String striiType) {
+         this.Id = ncomp.Id;
+         this.rowIndex = rowIndex;
+         this.Type = ncomp.RecordType.Name;
+         this.InvestType = ncomp.Investigation__r.Investigation_Type__c;
+         this.regulationMap = null;
+         if(ncomp.Name != null){
+              this.regulationMap = nRegMap.get(ncomp.id);
+         }
+            this.name = ncomp.Investigation__r.name;
+            this.implementdate = ncomp.Date_Implemented__c != null ? ncomp.Date_Implemented__c.format() : String.valueOf(ncomp.Date_Implemented__c);
+            this.observations = ncomp.observations__c;
+            this.closedDate = ncomp.Investigation__r.Closed_Date__c != null ? ncomp.Investigation__r.Closed_Date__c.format() : String.valueOf(ncomp.Investigation__r.Closed_Date__c);
+            this.correctionPlan = ncomp.correction_plan__c;
+            this.compItem = ncomp;
+            this.ncFeedback = ncomp.Corrective_Action_EEC_Feedback__c;
+            this.invStatus = ncomp.Investigation__r.Investigation_Status__c;
+            this.invId = ncomp.Investigation__c;
+            this.iiType = striiType;
+        }
+        
+      global Integer compareTo(Object compareTo) {
+            InsInvListReportWrapper InspInvWrapper = (InsInvListReportWrapper)compareTo;
+            
+            system.debug('===> iiType : ' + iiType);
+            if(iiType == 'inspection'){
+                system.debug('Inspection ==>');
+                system.debug('#######> This.dateofvisit : ' + this.dateofvisit);
+                system.debug('===> this.dateofvisit : ' + this.dateofvisit);
+                system.debug('===> InspInvWrapper.dateofvisit : ' + InspInvWrapper.dateofvisit);
+                if(this.dateofvisit != null && this.dateofvisit != ''){
+                    if(date.parse(this.dateofvisit) > date.parse(InspInvWrapper.dateofvisit)){ 
+                        system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                        system.debug('===> date.parse(InspInvWrapper.dateofvisit) : ' + date.parse(InspInvWrapper.dateofvisit));    
+                        system.debug('Return -1');
+                        return -1;
+                    } else {
+                        if(date.parse(this.dateofvisit) < date.parse(InspInvWrapper.dateofvisit)){    
+                            system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                            system.debug('===> date.parse(InspInvWrapper.dateofvisit : ' + date.parse(InspInvWrapper.dateofvisit)); 
+                            system.debug('Return +1');                      
+                            return 1;                           
+                        } else {   
+                            system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                            system.debug('===> date.parse(InspInvWrapper.dateofvisit) : ' + date.parse(InspInvWrapper.dateofvisit));    
+                            system.debug('Return 0');                           
+                            return 0;
+                        }
+                    }
+                } else {     
+                            system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                            system.debug('===> date.parse(InspInvWrapper.dateofvisit) : ' + date.parse(InspInvWrapper.dateofvisit));    
+                            system.debug('Return +00');                 
+                    return 0;
+                }
+            } else {
+                system.debug('Investigation ==>');
+                system.debug('++++++> This.closedDate : ' + this.closedDate);
+                system.debug('===> InspInvWrapper.closedDate : ' + InspInvWrapper.closedDate);              
+                if(this.closedDate != null && this.closedDate != ''){
+                    if(date.parse(this.closedDate) > date.parse(InspInvWrapper.closedDate)){  
+                            system.debug('===> date.parse(this.closedDate) : ' + date.parse(this.closedDate));
+                            system.debug('===> date.parse(InspInvWrapper.closedDate) : ' + date.parse(InspInvWrapper.closedDate));  
+                            system.debug('Return -1');                  
+                        return -1;                      
+                    } else {
+                        if(date.parse(this.closedDate) < date.parse(InspInvWrapper.closedDate)){   
+                            system.debug('===> date.parse(this.closedDate) : ' + date.parse(this.closedDate));
+                            system.debug('===> date.parse(InspInvWrapper.closedDate) : ' + date.parse(InspInvWrapper.closedDate));  
+                            system.debug('Return +1');                      
+                            return 1;
+                            
+                        } else {    
+                            system.debug('===> date.parse(this.closedDate) : ' + date.parse(this.closedDate));
+                            system.debug('===> date.parse(InspInvWrapper.closedDate) : ' + date.parse(InspInvWrapper.closedDate));  
+                            system.debug('Return 0');                       
+                            return 0;
+                        }
+                    }
+                } else {    system.debug('===> date.parse(this.closedDate) : ' + date.parse(this.closedDate));
+                            system.debug('===> date.parse(InspInvWrapper.closedDate) : ' + date.parse(InspInvWrapper.closedDate));  
+                            system.debug('Return 000');
+                
+                    return 0;
+                }
+            }
+      }
+    }
+
+  global class visitCompListReportWrapper implements Comparable{
+       
+    public Id Id {get;set;}
+    public String visitname {get;set;}
+    public Integer rowIndex { get; set; }
+    public String Type {get; private set;}
+    public String dateofvisit {get;set;}
+    public Inspection_Item__c inspItem {get;set;}
+    public String name {get;set;}  
+    public String inspStatus {get; set;}
+    public String inspToolUser {get; set;}
+    public String inspType {get; set;}
+    public String inspDescription {get; set;}   
+    
+    public visitCompListReportWrapper (Integer rowIndex, Inspection_Item__c insp) {
+    
+         this.Id = insp.Id;
+         this.visitname = insp.Inspection_No__r.Name;        
+         this.rowIndex = rowIndex;
+         this.Type = insp.RecordType.Name;
+         this.dateofvisit = insp.Inspection_No__r.Date_Of_Visit__c != null ? insp.Inspection_No__r.Date_Of_Visit__c.format() : String.valueOf(insp.Inspection_No__r.Date_Of_Visit__c);
+         this.inspItem = insp;
+         this.name = insp.Inspection_No__r.Investigation__r.Name;
+         this.inspStatus = insp.Inspection_No__r.Status__c;
+         this.inspToolUser = insp.Inspection_No__r.Visit_Tool_Used__r.Name;
+         this.inspType = insp.Inspection_No__r.RecordType.Name;    
+         this.inspDescription = insp.Description_of_inspection__c;       
+    }
+        
+    global Integer compareTo(Object compareTo) {
+    
+          visitCompListReportWrapper visitCWrapper = (visitCompListReportWrapper)compareTo;
+          
+
+          if(this.dateofvisit != null && this.dateofvisit != ''){
+              if(date.parse(this.dateofvisit) > date.parse(visitCWrapper.dateofvisit)){ 
+                  system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                  system.debug('===> date.parse(visitCWrapper.dateofvisit) : ' + date.parse(visitCWrapper.dateofvisit));    
+                  system.debug('Return -1');
+                  return -1;
+              } else {
+                  if(date.parse(this.dateofvisit) < date.parse(visitCWrapper.dateofvisit)){    
+                      system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                      system.debug('===> date.parse(visitCWrapper.dateofvisit : ' + date.parse(visitCWrapper.dateofvisit)); 
+                      system.debug('Return +1');                      
+                      return 1;                           
+                  } else {   
+                      system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                      system.debug('===> date.parse(visitCWrapper.dateofvisit) : ' + date.parse(visitCWrapper.dateofvisit));    
+                      system.debug('Return 0');                           
+                      return 0;
+                  }
+              }
+          } else {     
+                      system.debug('===> date.parse(this.dateofvisit) : ' + date.parse(this.dateofvisit));
+                      system.debug('===> date.parse(visitCWrapper.dateofvisit) : ' + date.parse(visitCWrapper.dateofvisit));    
+                      system.debug('Return +00');                 
+              return 0;
+          }
+    }
+  } 
+    //Changes ends here
     public class ComplainceListWrapper{
        
     public Id Id {get;set;}
@@ -506,7 +854,7 @@ public without sharing class EEC_PortalNonCompliancePageController {
                   invUpdates.add(inv);
               }
               Id recordid = [SELECT Id FROM Investigation__c WHERE Name =: name limit 1].Id;
-              sendEmail(recordid); 
+              sendEmail(recordid,'inv'); 
               emailSent = true;
           }
       }
@@ -515,7 +863,7 @@ public without sharing class EEC_PortalNonCompliancePageController {
         System.debug('allVisitNonComplianceItems--->' + allVisitNonComplianceItems);
         if(allVisitNonComplianceItems.get(name).isEmpty() && !emailSent){
             Id recordid = [SELECT Id FROM Inspection__c WHERE Name =: name limit 1].Id;
-            sendEmail(recordid);
+            sendEmail(recordid,'visit');
         }
       }
       if(invUpdates.size() > 0)
@@ -554,7 +902,7 @@ public without sharing class EEC_PortalNonCompliancePageController {
         return null;
     }
   
-    private void sendEmail(Id recordId){
+    private void sendEmail(Id recordId, string visitORinv){
         EEC_Config__c baseURL = EEC_Config__c.getOrgDefaults();
         EEC_EmailUtil email = new EEC_EmailUtil();   
         OrgWideEmailAddress owa = [SELECT id, Address FROM OrgWideEmailAddress WHERE DisplayName  = 'EEC LEAD Alert'];  
@@ -564,14 +912,21 @@ public without sharing class EEC_PortalNonCompliancePageController {
             email.toAddresses.add(provider.Owner.Manager.Email);
         email.saveAsActivity = false;
         email.orgWideEmailId = owa.Id; 
-        email.plainTextBody = template34.Body.replace('{!Inspection__c.Provider_No__c}', provider.Name)
-                                             .replace('{!Investigation__c.Link}', baseURL.Salesforce_Base_URL__c  + '/' + recordId)
-                                             .replace('{!Inspection__c.Link}', '')
-                                             .replace('{!Investigation__c.Provider_No__c}','');
+        if(visitORInv == 'inv'){
+            email.plainTextBody = template34.Body.replace('{!Inspection__c.Provider_No__c}', provider.Name)
+                                                 .replace('{!Investigation__c.Provider_No__c}','')
+                                                 .replace('{!Investigation__c.Link}', baseURL.Salesforce_Base_URL__c  + '/' + recordId)
+                                                 .replace('{!Inspection__c.Link}', '');
+        }
+        else{
+            email.plainTextBody = template34.Body.replace('{!Inspection__c.Provider_No__c}', provider.Name)
+                                                 .replace('{!Investigation__c.Provider_No__c}','')
+                                                 .replace('{!Inspection__c.Link}', baseURL.Salesforce_Base_URL__c  + '/' + recordId)
+                                                 .replace('{!Investigation__c.Link}', '');
+        }
         email.subject = template34.Subject;  
         email.whatId = provider.Id;
-        email.sendEmail();
-        
+        email.sendEmail();       
     }
   
 }
